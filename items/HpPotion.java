@@ -2,10 +2,7 @@ package items;
 
 import objects.Item;
 
-import java.util.Scanner;
-
 public class HpPotion extends Item {
-    Scanner scan = new Scanner(System.in);
     private int hpPotionHealAmount;
     private int hpPotionDropChance;
 
