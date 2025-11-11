@@ -1,8 +1,11 @@
 package objects;
 import enemies.*;
 import rooms.*;
+
 import java.util.HashMap;
 import java.util.Map;
+
+import objects.io.GameIO;
 public class Environment {
 
     int currentLevel = 0;
@@ -410,57 +413,57 @@ public class Environment {
 
 
 
-    Room goToNextLevel() {
+    Room goToNextLevel(GameIO io) {
         currentLevel += 1;
         if (currentLevel == 2) {
-            System.out.println("You are in level 2");
+            io.println("You are in level 2");
             return getLevel2StartingRoom();
         }else if (currentLevel == 3){
-            System.out.println("You are in level 3");
+            io.println("You are in level 3");
             return getLevel3StartingRoom();
         }else if (currentLevel == 4){
-            System.out.println("You are in level 4");
+            io.println("You are in level 4");
             return getLevel4StartingRoom();
         }else if (currentLevel == 5){
-            System.out.println("You are in level 5");
+            io.println("You are in level 5");
             return getLevel5StartingRoom();
         }else if (currentLevel == 6){
-            System.out.println("You are in level 6");
+            io.println("You are in level 6");
             return getLevel6StartingRoom();
         }else if (currentLevel == 7){
-            System.out.println("You are in level 7");
+            io.println("You are in level 7");
             return getLevel7StartingRoom();
         }else if (currentLevel == 8){
-            System.out.println("You are in level 8");
+            io.println("You are in level 8");
             return getLevel8StartingRoom();
         }else if (currentLevel == 9){
-            System.out.println("You are in level 9");
+            io.println("You are in level 9");
             return getLevel9StartingRoom();
         }else if (currentLevel == 10){
-            System.out.println("You are in level 10");
+            io.println("You are in level 10");
             return getLevel10StartingRoom();
         }else if (currentLevel == 11){
-            System.out.println("You are in level 11");
+            io.println("You are in level 11");
             return getLevel11StartingRoom();
         }else if (currentLevel == 12){
-            System.out.println("You are in level 12");
+            io.println("You are in level 12");
             return getLevel12StartingRoom();
         }else if (currentLevel == 13){
-            System.out.println("You are in level 13");
+            io.println("You are in level 13");
             return getLevel13StartingRoom();
         }else if (currentLevel == 14){
-            System.out.println("You are in level 14");
+            io.println("You are in level 14");
             return getLevel14StartingRoom();
         }else if (currentLevel == 15){
-            System.out.println("You are in level 15");
+            io.println("You are in level 15");
             return getLevel15StartingRoom();
         }else if (currentLevel == 16){
-            System.out.println("You are in level 16");
+            io.println("You are in level 16");
             return getLevel16StartingRoom();
         }else if (currentLevel == 17){
-            System.out.println("You have reached the end of the dungeon and defeated all the enemies. Congratulations");
+            io.println("You have reached the end of the dungeon and defeated all the enemies. Congratulations");
         }
-        System.out.println("You are in level 1");
+        io.println("You are in level 1");
         return getLevel1StartingRoom();
     }}
 

@@ -2,34 +2,31 @@ package objects;
 
 import enemies.*;
 import items.*;
+import objects.io.ConsoleGameIO;
+import objects.io.GameIO;
 
-import java.io.*;
-import java.nio.BufferOverflowException;
+import java.io.BufferedWriter;
+import java.io.FileWriter;
+import java.io.IOException;
 import java.util.HashMap;
 import java.util.Random;
-import java.util.Scanner;
 
 public class Game {
-    private static final String
-            askUser = "What do you want to do?",
-            welcomeUser = """
-
-                    Welcome to the game.
-                    !Please read!
-                    You can move by typing go, leaving and then specifying the direction.(east,west,south,north)
-                    You can use the words east,north,south,west to move around.
-                    For example: go east, go south.
-                    You can type inventory to open up your inventory.             
-                    You can type attack to fight with the enemy inside that room.
-                    To use a weapon, type use, leave a space and specify the weapon's name.
-                    To wear an armor, type wear, leave a space and specify the armor's name.
-                    To add an item to your inventory, type pick up, leave a space and specify an item name.
-                    Specified item names must be written in lowercase and adjacent.
-                    For example: pick up chainmailarmor, use dragonsword, wear snakearmor, pick up potion
-                    You can type quit to exit the game.""";
-    private static final String[]
-            movement = {"go"}, directionNorth = {"north"}, directionEast = {"east"}, directionSouth = {"south"},
-            directionWest = {"west"}, openInventory = {"inventory"}, attack = {"attack"}, stop = {"quit"};
+    private static final String askUser = "What do you want to do?";
+    private static final String welcomeUser = """
+            Welcome to the game.
+            !Please read!
+            You can move by typing go, leaving and then specifying the direction.(east,west,south,north)
+            You can use the words east,north,south,west to move around.
+            For example: go east, go south.
+            You can type inventory to open up your inventory.
+            You can type attack to fight with the enemy inside that room.
+            To use a weapon, type use, leave a space and specify the weapon's name.
+            To wear an armor, type wear, leave a space and specify the armor's name.
+            To add an item to your inventory, type pick up, leave a space and specify an item name.
+            Specified item names must be written in lowercase and adjacent.
+            For example: pick up chainmailarmor, use dragonsword, wear snakearmor, pick up potion
+            You can type quit to exit the game.""";
 
     public static HashMap<String, Item> allWeapons = new HashMap<>();
     public static HashMap<String, Armor> allArmors = new HashMap<>();
@@ -48,55 +45,61 @@ public class Game {
     public static Armor lionArmor = new LionArmor();
     public static Item dagger = new Dagger();
     public static Item longSword = new Longsword();
-    public static HpPotion pot = new HpPotion("Potion", "A little potion which gives health ",
-            20, 40, 5);
-
+    public static HpPotion pot = new HpPotion("Potion", "A little potion which gives health ", 20, 40, 5);
 
     private final int potDropChance = 40;
     private int highScore = 0;
     Hero hero = new Hero();
-    Scanner scan = new Scanner(System.in);
-    Random rand = new Random();
-    private objects.Inventory inventory;
+    private final Random rand = new Random();
+    private final GameIO io;
     private int levelHeroKillCount = 0;
     private int totalDeadEnemyCount = 0;
     private int savedTownsPeopleCount = 0;
     private final int townsPeopleHealAmount = 5;
     private final int townsPeopleHealChance = 10;
     private Room currentRoom;
-    boolean running = true;
+    private boolean running = true;
+
+    public Game() {
+        this(new ConsoleGameIO());
+    }
+
+    public Game(GameIO io) {
+        this.io = io;
+    }
 
     private void drinkPot() {
         if (hero.getHp() == 100) {
-            System.out.println("You are at max health");
+            io.println("You are at max health");
         } else if (hero.getCurrHPPotionAmount() > 0) {
-            int temp;
-            temp = hero.getHp();
+            int temp = hero.getHp();
             hero.addHp(pot.getHpPotionHealAmount());
             hero.removePotion(pot);
-            System.out.println("You drank a health potion, it healed you for " + Math.min(pot.getHpPotionHealAmount(), 100 - temp)
+            io.println("You drank a health potion, it healed you for " + Math.min(pot.getHpPotionHealAmount(), 100 - temp)
                     + " HP" + "\nYou now have " + hero.getHp() + " HP."
                     + "\nYou have " + hero.getCurrHPPotionAmount() + " health potions left.");
+            io.updateHero(hero);
         } else {
-            System.out.println("You are out of health potions!" +
-                    "\nDefeat an enemy for a chance to drop a heal");
+            io.println("You are out of health potions!"
+                    + "\nDefeat an enemy for a chance to drop a heal");
         }
     }
 
     private void enemyPotDropChance() {
         if (rand.nextInt(100) < potDropChance && hero.getCurrHPPotionAmount() < 3) {
             hero.addPotion(pot);
-            System.out.println(" # The " + currentRoom.getEnemy().getEnemyName() + " dropped a health potion! # ");
-            System.out.println(" # You now have " + hero.getCurrHPPotionAmount() + " HP Potions! # ");
-        }else{
-            System.out.println("No potion dropped from the enemy");
+            io.println(" # The " + currentRoom.getEnemy().getEnemyName() + " dropped a health potion! # ");
+            io.println(" # You now have " + hero.getCurrHPPotionAmount() + " HP Potions! # ");
+            io.updateHero(hero);
+        } else {
+            io.println("No potion dropped from the enemy");
         }
     }
 
     private void initializeItems() {
         allWeapons.put("shortsword", shortSword);
         allWeapons.put("longsword", longSword);
-        allArmors.put("leatherarmor", chainmailArmor);
+        allArmors.put("leatherarmor", leatherArmor);
         allArmors.put("chainmailarmor", chainmailArmor);
         allWeapons.put("longbow", longbow);
         allWeapons.put("crossbow", crossbow);
@@ -111,111 +114,171 @@ public class Game {
         allItems.putAll(allWeapons);
         allItems.putAll(allArmors);
     }
-    public int getValues(){
+
+    public int getValues() {
         int score = 0;
-        for(Item item : hero.inventory.getItems()){
+        for (Item item : hero.getInventory().getItems()) {
             score += item.getValue();
         }
         return score;
     }
 
-    private void gameStart() {
-        hero.getName();
-        System.out.println("Welcome to the game");
+    private void promptForHeroDetails() {
+        io.println("Please enter your name.");
+        hero.setName(io.readLine());
+        hero.setHp(100);
+        io.updateHero(hero);
+        io.println("Please choose your gender. \n Press 1 for Male \n Press 2 for Female. \n Press 3 if you do not prefer to say.");
+        int choice = io.readInt();
+        switch (choice) {
+            case 1 -> {
+                hero.setGender("Male");
+                io.println("Gender: Male");
+            }
+            case 2 -> {
+                hero.setGender("Female");
+                io.println("Gender: Female");
+            }
+            default -> {
+                hero.setGender("Does not want to say");
+                io.println("Gender: Hero does not want to say.");
+            }
+        }
+        io.updateHero(hero);
+    }
 
-        System.out.println("Choose one starting weapon");
-        System.out.println("1 for Shortbow");
-        System.out.println("2 for Dagger");
-        int i = scan.nextInt();
+    private void gameStart() {
+        promptForHeroDetails();
+        io.println("Welcome to the game");
+
+        io.println("Choose one starting weapon");
+        io.println("1 for Shortbow");
+        io.println("2 for Dagger");
+        int i = io.readInt();
         switch (i) {
-            case 1:
+            case 1 -> {
                 hero.setWeaponInHand(shortbow);
-                hero.inventory.add(shortbow);
-                System.out.println("You will start with the " + hero.getWeaponInHand().getItemName() + " as your weapon");
-                break;
-            case 2:
+                hero.getInventory().add(shortbow);
+                io.println("You will start with the " + hero.getWeaponInHand().getItemName() + " as your weapon");
+            }
+            case 2 -> {
                 hero.setWeaponInHand(dagger);
-                hero.inventory.add(dagger);
-                System.out.println("You will start with the " + hero.getWeaponInHand().getItemName() + " as your weapon");
-                break;
+                hero.getInventory().add(dagger);
+                io.println("You will start with the " + hero.getWeaponInHand().getItemName() + " as your weapon");
+            }
+            default -> io.println("Invalid choice, defaulting to the Dagger.");
+        }
+        if (hero.getWeaponInHand() == null) {
+            hero.setWeaponInHand(dagger);
+            hero.getInventory().add(dagger);
         }
         hero.setCurrentlyWornArmor(leatherArmor);
-        hero.inventory.add(leatherArmor);
-        System.out.println("You will start with the " + hero.getCurrentlyWornArmor().getItemName() + " as your armor");
+        hero.getInventory().add(leatherArmor);
+        io.println("You will start with the " + hero.getCurrentlyWornArmor().getItemName() + " as your armor");
         hero.addPotion(pot);
         hero.addPotion(pot);
         hero.setPlayerDamage(hero.getWeaponInHand().getDamage());
         hero.setArmor((hero.getCurrentlyWornArmor()).getGiveArmor());
         hero.setHp(hero.getHp());
 
-        System.out.println(hero.getWeaponInHand().getItemName() + " can deal " + hero.getPlayerDamage() + " damage");
-        System.out.println(hero.getCurrentlyWornArmor().getItemName() + " can protect you from "
+        io.println(hero.getWeaponInHand().getItemName() + " can deal " + hero.getPlayerDamage() + " damage");
+        io.println(hero.getCurrentlyWornArmor().getItemName() + " can protect you from "
                 + hero.getArmor() + " damage");
         if (hero.getCurrHPPotionAmount() == 1) {
-            System.out.println("You have " + hero.getCurrHPPotionAmount() + " potion");
+            io.println("You have " + hero.getCurrHPPotionAmount() + " potion");
         } else {
-            System.out.println("You have " + hero.getCurrHPPotionAmount() + " potions");
+            io.println("You have " + hero.getCurrHPPotionAmount() + " potions");
         }
-        scan.nextLine();
+        io.updateHero(hero);
+    }
+
+    private void describeCurrentRoom() {
+        if (currentRoom == null) {
+            return;
+        }
+        io.println(currentRoom.getDescription());
+        if (currentRoom.canMoveNorth()) {
+            io.println("The door to the north is open.");
+        }
+        if (currentRoom.canMoveEast()) {
+            io.println("The door to the east is open.");
+        }
+        if (currentRoom.canMoveSouth()) {
+            io.println("The door to the south is open.");
+        }
+        if (currentRoom.canMoveWest()) {
+            io.println("The door to the west is open.");
+        }
+        if (!currentRoom.getItems().isEmpty()) {
+            for (Item item : currentRoom.getItems()) {
+                io.println("You see a " + item.getItemName() + ".");
+            }
+        }
+        io.updateRoom(currentRoom);
     }
 
     private void parseInput(String input) {
-
+        if (input == null) {
+            return;
+        }
         input = input.replaceAll("\\s+", " ");
-
-
         input = input.trim();
 
+        if (input.isEmpty()) {
+            return;
+        }
 
         String[] words = input.split(" ");
 
-
-        if (words.length == 0) {
-            return;
-        }
-
-        if (inputEquals(words, movement, directionNorth)) {
+        if (inputEquals(words, new String[]{"go"}, new String[]{"north"})) {
             if (currentRoom.canMoveNorth()) {
                 currentRoom = currentRoom.getNorth();
-                System.out.println("You moved north.");
+                io.println("You moved north.");
+                describeCurrentRoom();
             } else {
-                System.out.println("You can't move north.");
+                io.println("You can't move north.");
             }
             return;
         }
 
-        if (inputEquals(words, movement, directionEast)) {
+        if (inputEquals(words, new String[]{"go"}, new String[]{"east"})) {
             if (currentRoom.canMoveEast()) {
                 currentRoom = currentRoom.getEast();
-                System.out.println("You moved east.");
+                io.println("You moved east.");
+                describeCurrentRoom();
             } else {
-                System.out.println("You can't move east.");
+                io.println("You can't move east.");
             }
             return;
         }
 
-
-        if (inputEquals(words, movement, directionSouth)) {
+        if (inputEquals(words, new String[]{"go"}, new String[]{"south"})) {
             if (currentRoom.canMoveSouth()) {
                 currentRoom = currentRoom.getSouth();
-                System.out.println("You moved south.");
+                io.println("You moved south.");
+                describeCurrentRoom();
             } else {
-                System.out.println("You can't move south.");
+                io.println("You can't move south.");
             }
             return;
         }
 
-        if (inputEquals(words, movement, directionWest)) {
+        if (inputEquals(words, new String[]{"go"}, new String[]{"west"})) {
             if (currentRoom.canMoveWest()) {
                 currentRoom = currentRoom.getWest();
-                System.out.println("You moved west.");
+                io.println("You moved west.");
+                describeCurrentRoom();
             } else {
-                System.out.println("You can't move west.");
+                io.println("You can't move west.");
             }
             return;
         }
 
         if (inputEquals(words, new String[]{"pick"}, new String[]{"up"})) {
+            if (words.length < 3) {
+                io.println("Please specify which item to pick up.");
+                return;
+            }
             String itemName = words[2];
             for (int i = 3; i < words.length; i++) {
                 itemName += " " + words[i];
@@ -223,176 +286,190 @@ public class Game {
             if (currentRoom.containsItem(itemName)) {
                 currentRoom.removeItem(itemName);
                 hero.addItem(itemName);
-                System.out.println("You picked up the " + itemName + ".");
+                io.println("You picked up the " + itemName + ".");
+                io.updateHero(hero);
+                io.updateRoom(currentRoom);
             }
             if (hero.getCurrHPPotionAmount() == 3) {
-                System.out.println("But your potion pouch is full you can't have anymore HP Potions");
+                io.println("But your potion pouch is full you can't have anymore HP Potions");
             } else if (currentRoom.containsPot(pot)) {
-                if (currentRoom.containsPot(pot)) {
-                    hero.addPotion(pot);
-                    currentRoom.removePot(pot);
-                    System.out.println("You now have " + hero.getCurrHPPotionAmount() + " potions in your potion pouch");
-                } else {
-                    System.out.println("Please enter a valid answer");
-                }
+                hero.addPotion(pot);
+                currentRoom.removePot(pot);
+                io.println("You now have " + hero.getCurrHPPotionAmount() + " potions in your potion pouch");
+                io.updateHero(hero);
+                io.updateRoom(currentRoom);
             }
+            return;
         }
 
-        if (inputEquals(words, new String[]{"use"})){
-          String itemName = words[1];
-          for (int i = 2; i < words.length; i++) {
-              itemName += " " + words[i];
-          }
-          if (hero.inventory.contains(itemName)) {
-              hero.setWeaponInHand(allWeapons.get(itemName));
-              hero.setPlayerDamage(allWeapons.get(itemName).getDamage());
-              System.out.println("You now have " + itemName + " in your hands.");
-      } else {
-          System.out.println("That weapon isn't available");
-      }
-      return;
-          }
-        if (inputEquals(words, new String[]{"wear"})){
-            String itemName = words[2];
-            for (int i = 3; i < words.length; i++) {
+        if (inputEquals(words, new String[]{"use"})) {
+            if (words.length < 2) {
+                io.println("Please specify which weapon to use.");
+                return;
+            }
+            String itemName = words[1];
+            for (int i = 2; i < words.length; i++) {
+                itemName += " " + words[i];
+            }
+            if (hero.getInventory().contains(itemName)) {
+                hero.setWeaponInHand(allWeapons.get(itemName));
+                hero.setPlayerDamage(allWeapons.get(itemName).getDamage());
+                io.println("You now have " + itemName + " in your hands.");
+                io.updateHero(hero);
+            } else {
+                io.println("That weapon isn't available");
+            }
+            return;
+        }
+        if (inputEquals(words, new String[]{"wear"})) {
+            if (words.length < 2) {
+                io.println("Please specify which armor to wear.");
+                return;
+            }
+            String itemName = words[1];
+            for (int i = 2; i < words.length; i++) {
                 itemName += " " + words[i];
             }
             if (hero.containsItem(itemName)) {
                 hero.setCurrentlyWornArmor(allArmors.get(itemName));
                 hero.setArmor(allArmors.get(itemName).getGiveArmor());
-                System.out.println("You now wore " + itemName);
+                io.println("You now wore " + itemName);
+                io.updateHero(hero);
             } else {
-                System.out.println("That armor isn't available");
+                io.println("That armor isn't available");
             }
             return;
         }
 
-
-            if (inputEquals(words, new String[]{"drop"})) {
-                String itemName = words[1];
-                for (int i = 2; i < words.length; i++) {
-                    itemName += " " + words[i];
-                }
-                if (hero.containsItem(itemName)) {
-
-                    hero.removeItem(itemName);
-
-                    currentRoom.addItem(itemName);
-                    hero.setPlayerDamage(0);
-                    System.out.println("You dropped the " + itemName + ".");
-                } else {
-                    System.out.println("That item isn't available");
-                }
+        if (inputEquals(words, new String[]{"drop"})) {
+            if (words.length < 2) {
+                io.println("Please specify which item to drop.");
                 return;
             }
-            if (inputEquals(words, attack)) {
-                if (currentRoom.getEnemy() != null) {
-                    System.out.println("You engaged in a fight with a " + currentRoom.getEnemy().getEnemyName());
-                    System.out.println("You have " + hero.getHp() + " hp.");
-                    System.out.println("Your weapon deals " + hero.getPlayerDamage() + " damage");
-                    System.out.println(currentRoom.getEnemy().getEnemyName() + " can deal you " +
-                            currentRoom.getEnemy().getEnemyDamage() + " damage");
-                    while (hero.getHp() > 0 && currentRoom.getEnemy().getEnemyHealth() > 0) {
-                        System.out.println(currentRoom.getEnemy().getEnemyName() + " has " +
-                                currentRoom.getEnemy().getEnemyHealth() + " hp.");
-                        System.out.println(askUser);
-                        System.out.println("Type 1 for attacking the enemy");
-                        System.out.println("Type 2 for drinking a health potion");
-                        int fightInput = scan.nextInt();
-                        switch (fightInput) {
-                            case 1:
-                                currentRoom.getEnemy().takeDamage(hero.getPlayerDamage());
-                                hero.takeDamage(currentRoom.getEnemy().getEnemyDamage() - hero.getCurrentlyWornArmor().getGiveArmor());
-                                System.out.println("Your armor protected you from " +
-                                        hero.getCurrentlyWornArmor().getGiveArmor());
-                                System.out.println("You have taken " + (currentRoom.getEnemy().getEnemyDamage() -
-                                        hero.getCurrentlyWornArmor().getGiveArmor()) + " damage");
-                                System.out.println("You gave enemy " + hero.getPlayerDamage() + " damage");
-                                System.out.println("You have " + hero.getHp() + " hp.");
-                                break;
-                            case 2:
-                                drinkPot();
-                                break;
-                            default:
-                                System.out.println("Enter a valid command");
-                        }
-                    }
-                    if (hero.getHp() <= 0) {
-
-                        System.out.println("You died " + hero.getName());
-                        System.out.println("Number of enemies you killed : " + totalDeadEnemyCount);
-                        System.out.println("Number of people you saved : " + savedTownsPeopleCount);
-                        highScore = this.getValues();
-                        saveScore();
-                        System.exit(1);
-
-                    } else if (currentRoom.getEnemy().getEnemyHealth() <= 0) {
-                        System.out.println("You killed the " + currentRoom.getEnemy().getEnemyName());
-                        currentRoom.addItem(currentRoom.getEnemy().getDropsItem());
-                        System.out.println("Enemy dropped " + currentRoom.getEnemy().getDropsItem().getItemName());
-
-                        System.out.println("You saved a human from the hands of the " +
-                                currentRoom.getEnemy().getEnemyName());
-                        currentRoom.setEnemy(null);
-                        levelHeroKillCount++;
-                        totalDeadEnemyCount++;
-                        savedTownsPeopleCount++;
-                        if (rand.nextInt(100) < townsPeopleHealChance) {
-                            System.out.println("The human you save gave you a food");
-                            hero.setHp(hero.getHp() + townsPeopleHealAmount);
-                            System.out.println("Food healed you for " + townsPeopleHealAmount + "hp.");
-
-                        } else {
-                            System.out.println("The person you saved thanked you.");
-                        }
-                    }
-                    scan.nextLine();
-                } else if (currentRoom.getEnemy() == null){
-                    System.out.println("There is nothing to fight in this room");
-                }
+            String itemName = words[1];
+            for (int i = 2; i < words.length; i++) {
+                itemName += " " + words[i];
             }
-
-
-            if (inputEquals(words, openInventory)) {
-                System.out.println("Inventory:");
-                if (hero.inventory.isEmpty()) {
-                    System.out.println(" - There is nothing in here.");
-                } else {
-                    hero.inventory.printItems(" - %s\n");
-                    System.out.println("** You have " +hero.getCurrHPPotionAmount() + " potions **");
-                }
-                return;
+            if (hero.containsItem(itemName)) {
+                hero.removeItem(itemName);
+                currentRoom.addItem(itemName);
+                hero.setPlayerDamage(0);
+                io.println("You dropped the " + itemName + ".");
+                io.updateHero(hero);
+                io.updateRoom(currentRoom);
+            } else {
+                io.println("That item isn't available");
             }
-            if (inputEquals(words, stop)) {
-                System.out.println("You decided to run away and didn't accomplished what you have came to dungeon for");
-                System.out.println("You left all your items while escaping");
-                System.out.println("You will never be known as an hero. Those who know you will call you a coward");
-                System.exit(1);
-                return;
-            }
-        //  System.out.println("Please enter a valid command");
-
+            return;
         }
-        private static boolean inputEquals (String[]words, String[]...userInput){
-            if (words.length < userInput.length) {
+        if (inputEquals(words, new String[]{"attack"})) {
+            if (currentRoom.getEnemy() != null) {
+                io.println("You engaged in a fight with a " + currentRoom.getEnemy().getEnemyName());
+                io.println("You have " + hero.getHp() + " hp.");
+                io.println("Your weapon deals " + hero.getPlayerDamage() + " damage");
+                io.println(currentRoom.getEnemy().getEnemyName() + " can deal you " +
+                        currentRoom.getEnemy().getEnemyDamage() + " damage");
+                while (hero.getHp() > 0 && currentRoom.getEnemy().getEnemyHealth() > 0) {
+                    io.println(currentRoom.getEnemy().getEnemyName() + " has " +
+                            currentRoom.getEnemy().getEnemyHealth() + " hp.");
+                    io.println(askUser);
+                    io.println("Type 1 for attacking the enemy");
+                    io.println("Type 2 for drinking a health potion");
+                    int fightInput = io.readInt();
+                    switch (fightInput) {
+                        case 1 -> {
+                            currentRoom.getEnemy().takeDamage(hero.getPlayerDamage());
+                            hero.takeDamage(Math.max(0, currentRoom.getEnemy().getEnemyDamage() - hero.getCurrentlyWornArmor().getGiveArmor()));
+                            io.println("Your armor protected you from " +
+                                    hero.getCurrentlyWornArmor().getGiveArmor());
+                            io.println("You have taken " + Math.max(0, currentRoom.getEnemy().getEnemyDamage() -
+                                    hero.getCurrentlyWornArmor().getGiveArmor()) + " damage");
+                            io.println("You gave enemy " + hero.getPlayerDamage() + " damage");
+                            io.println("You have " + hero.getHp() + " hp.");
+                            io.updateHero(hero);
+                        }
+                        case 2 -> drinkPot();
+                        default -> io.println("Enter a valid command");
+                    }
+                }
+                if (hero.getHp() <= 0) {
+                    io.println("You died " + hero.getName());
+                    io.println("Number of enemies you killed : " + totalDeadEnemyCount);
+                    io.println("Number of people you saved : " + savedTownsPeopleCount);
+                    highScore = this.getValues();
+                    saveScore();
+                    stopGame(false);
+                } else if (currentRoom.getEnemy().getEnemyHealth() <= 0) {
+                    io.println("You killed the " + currentRoom.getEnemy().getEnemyName());
+                    currentRoom.addItem(currentRoom.getEnemy().getDropsItem());
+                    io.println("Enemy dropped " + currentRoom.getEnemy().getDropsItem().getItemName());
+
+                    io.println("You saved a human from the hands of the " +
+                            currentRoom.getEnemy().getEnemyName());
+                    enemyPotDropChance();
+                    currentRoom.setEnemy(null);
+                    levelHeroKillCount++;
+                    totalDeadEnemyCount++;
+                    savedTownsPeopleCount++;
+                    if (rand.nextInt(100) < townsPeopleHealChance) {
+                        io.println("The human you save gave you a food");
+                        hero.setHp(hero.getHp() + townsPeopleHealAmount);
+                        io.println("Food healed you for " + townsPeopleHealAmount + "hp.");
+                        io.updateHero(hero);
+                    } else {
+                        io.println("The person you saved thanked you.");
+                    }
+                    io.updateRoom(currentRoom);
+                }
+            } else {
+                io.println("There is nothing to fight in this room");
+            }
+            return;
+        }
+
+        if (inputEquals(words, new String[]{"inventory"})) {
+            io.println("Inventory:");
+            if (hero.getInventory().isEmpty()) {
+                io.println(" - There is nothing in here.");
+            } else {
+                io.println(hero.getInventory().formatItems(" - %s"));
+                io.println("** You have " + hero.getCurrHPPotionAmount() + " potions **");
+            }
+            return;
+        }
+        if (inputEquals(words, new String[]{"quit"})) {
+            io.println("You decided to run away and didn't accomplished what you have came to dungeon for");
+            io.println("You left all your items while escaping");
+            io.println("You will never be known as an hero. Those who know you will call you a coward");
+            stopGame(false);
+            return;
+        }
+    }
+
+    private static boolean inputEquals(String[] words, String[]... userInput) {
+        if (words.length < userInput.length) {
+            return false;
+        }
+        for (int i = 0; i < userInput.length; i++) {
+            String word = words[i];
+            String[] possibleWords = userInput[i];
+            if (!equalsAny(word, possibleWords)) {
                 return false;
             }
-            for (int i = 0; i < userInput.length; i++) {
-                String word = words[i];
-                String[] possibleWords = userInput[i];
-                if (!equalsAny(word, possibleWords)) {
-                    return false;
-                }
-            }return true;
         }
-        private static boolean equalsAny (String word, String[]possibleWords){
-            for (String possibility : possibleWords) {
-                if (word.equalsIgnoreCase(possibility)) {
-                    return true;
-                }
-            }return false;
+        return true;
+    }
+
+    private static boolean equalsAny(String word, String[] possibleWords) {
+        for (String possibility : possibleWords) {
+            if (word.equalsIgnoreCase(possibility)) {
+                return true;
+            }
         }
-        public void run () {
+        return false;
+    }
+
+    public void run() {
         Environment environment = new Environment();
         environment.initializeLevel1();
         environment.initializeLevel2();
@@ -411,51 +488,61 @@ public class Game {
         environment.initializeLevel15();
         environment.initializeLevel16();
 
-            currentRoom = environment.getLevel1StartingRoom();
+        currentRoom = environment.getLevel1StartingRoom();
 
-            initializeItems();
-            gameStart();
-            System.out.println(welcomeUser);
-            System.out.println("You just got in the dungeon");
-            while (running) {
-                currentRoom.printDescription();
-                currentRoom.printDirections();
-              currentRoom.printItems();
-                System.out.println(askUser);
-                String start = scan.nextLine();
-                parseInput(start);
+        initializeItems();
+        gameStart();
+        io.println(welcomeUser);
+        io.println("You just got in the dungeon");
+        io.println("You are in level 1");
+        describeCurrentRoom();
 
-                if(levelHeroKillCount == 3){
-                    currentRoom = environment.goToNextLevel();
-                    levelHeroKillCount = 0;
-                }
+        while (running) {
+            io.println(askUser);
+            String start = io.readLine();
+            parseInput(start);
 
-                if(environment.getCurrentLevel() == 17){
-                    saveScore();
-                    System.exit(1);
-                }
-
+            if (!running) {
+                break;
             }
 
+            if (levelHeroKillCount == 3) {
+                currentRoom = environment.goToNextLevel(io);
+                levelHeroKillCount = 0;
+                describeCurrentRoom();
+            }
+
+            if (environment.getCurrentLevel() == 17) {
+                highScore = this.getValues();
+                saveScore();
+                stopGame(true);
+            }
         }
+    }
+
+    private void stopGame(boolean heroWon) {
+        running = false;
+        io.onGameFinished(heroWon);
+    }
+
     public void saveScore() {
         FileWriter writeFile = null;
         BufferedWriter writer = null;
         try {
             writeFile = new FileWriter("highscore.txt");
             writer = new BufferedWriter(writeFile);
-            writer.write(highScore);
+            writer.write(String.valueOf(highScore));
 
         } catch (Exception e) {
             e.printStackTrace();
         } finally {
-            try {
-                writer.close();
-            } catch (IOException e) {
-                e.printStackTrace();
+            if (writer != null) {
+                try {
+                    writer.close();
+                } catch (IOException e) {
+                    e.printStackTrace();
+                }
             }
         }
     }
-    }
-
-
+}

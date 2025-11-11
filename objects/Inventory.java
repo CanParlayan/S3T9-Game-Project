@@ -1,7 +1,5 @@
 package objects;
 
-import objects.Item;
-
 import java.util.HashSet;
 
 public class Inventory {
@@ -19,7 +17,6 @@ public class Inventory {
         items.add(Game.allItems.get(itemName));
     }
 
-
     public void remove(Item item) {
         items.remove(item);
     }
@@ -36,15 +33,19 @@ public class Inventory {
         return items.contains(Game.allItems.get(itemName));
     }
 
-    public void printItems(String outputFormatString) {
-        for(Item item: items) {
-            System.out.printf(outputFormatString, item.getItemName());
+    public String formatItems(String outputFormatString) {
+        StringBuilder builder = new StringBuilder();
+        for (Item item : items) {
+            builder.append(String.format(outputFormatString, item.getItemName()));
+            if (!outputFormatString.endsWith("\n")) {
+                builder.append("\n");
+            }
         }
+        return builder.toString();
     }
 
     public boolean isEmpty() {
-        if(items.size() == 0) return true;
-        else return false;
+        return items.isEmpty();
     }
 
     public void setItems(HashSet<Item> items) {
@@ -54,4 +55,5 @@ public class Inventory {
     public HashSet<Item> getItems() {
         return items;
     }
+
 }
