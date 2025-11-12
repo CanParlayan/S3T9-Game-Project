@@ -1,6 +1,4 @@
-import com.badlogic.gdx.backends.lwjgl3.Lwjgl3Application;
-import com.badlogic.gdx.backends.lwjgl3.Lwjgl3ApplicationConfiguration;
-import gdx.DungeonGame;
+import gui.GameApp;
 import objects.Game;
 import objects.io.ConsoleGameIO;
 
@@ -11,11 +9,7 @@ public class MyMain {
             Game game = new Game(new ConsoleGameIO());
             game.run();
         } else {
-            Lwjgl3ApplicationConfiguration config = new Lwjgl3ApplicationConfiguration();
-            config.setTitle("Dungeon Adventure");
-            config.useVsync(true);
-            config.setWindowedMode(1100, 700);
-            new Lwjgl3Application(new DungeonGame(), config);
+            GameApp.launch(GameApp.class, args);
         }
     }
 }
